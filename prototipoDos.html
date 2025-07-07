@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>P.F.I 11 - Seguimiento Académico</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f0f4f8;
+      margin: 0;
+      padding: 20px;
+    }
+    .container {
+      max-width: 900px;
+      margin: auto;
+      background: white;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    input, select, button {
+      padding: 8px;
+      margin: 5px 0;
+      width: 100%;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+    }
+    table, th, td {
+      border: 1px solid #ccc;
+    }
+    th, td {
+      padding: 10px;
+      text-align: center;
+    }
+    .promedio {
+      margin-top: 20px;
+      font-weight: bold;
+      color: #2980b9;
+    }
+    .acciones button {
+      margin: 0 2px;
+    }
+    .filtros {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 20px;
+    }
+    .filtros > * {
+      flex: 1;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>📘 P.F.I - 11</h1>
+    <h2>Registro de Notas por Período</h2>
+
+    <label for="materia">Materia:</label>
+    <input type="text" id="materia" placeholder="Ej: Matemáticas">
+
+    <label for="periodo">Período:</label>
+    <select id="periodo">
+      <option value="1">Período 1</option>
+      <option value="2">Período 2</option>
+      <option value="3">Período 3</option>
+    </select>
+
+    <label for="nota">Nota:</label>
+    <select id="nota">
+      <option value="J">J - Bajo</option>
+      <option value="B">B - Básico</option>
+      <option value="A">A - Alto</option>
+      <option value="S">S - Superior</option>
+    </select>
+
+    <button onclick="agregarNota()">Agregar Nota</button>
+
+    <div class="filtros">
+      <input type="text" id="filtroMateria" placeholder="Filtrar por materia" oninput="actualizarTabla()">
+      <select id="filtroPeriodo" onchange="actualizarTabla()">
+        <option value="">Todos los períodos</option>
+        <option value="1">Período 1</option>
+        <option value="2">Período 2</option>
+        <option value="3">Período 3</option>
+      </select>
+      <select id="filtroNota" onchange="actualizarTabla()">
+        <option value="">Todas las notas</option>
+        <option value="J">J</option>
+        <option value="B">B</option>
+        <option value="A">A</option>
+        <option value="S">S</option>
+      </select>
+    </div>
+
+    <table id="tablaNotas">
+      <thead>
+        <tr>
+          <th>Materia</th>
+          <th>Período</th>
+          <th>Nota</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+
+    <div class="promedio" id="promedio">Promedio: -</div>
+
+    <button onclick="exportarExcel()">Exportar a Excel</button>
+    <button onclick="exportarPDF()">Exportar a PDF</button>
+  </div>
+
+  <script>
+    let notas = JSON.parse(localStorage.getItem("notasEduTrack")) || [];
+    const equivalencias = { 'J': 1, 'B': 2, 'A': 3, 'S': 4 };
+
+    function guardarNotas() {
+      localStorage.setItem("notasEduTrack", JSON.stringify(notas));
+    }
+
+    function agregarNota() {
+      const materia = document.getElementById("materia").value.trim();
+      const periodo = document.getElementById("periodo").value;
+      const nota = document.getElementById("nota").value;
+
+      if (!materia || !nota) {
+        alert("Por favor completa todos los campos.");
+        return;
+      }
+
+      notas.push({ materia, periodo, nota });
+      guardarNotas();
+      actualizarTabla();
+
+      document.getElementById("materia").value = "";
+      document.getElementById("periodo").value = "1";
+      document.getElementById("nota").value = "J";
+    }
+
+    function eliminarNota(index) {
+      if (confirm("¿Deseas eliminar esta nota?")) {
+        notas.splice(index, 1);
+        guardarNotas();
+        actualizarTabla();
+      }
+    }
+
+    function actualizarTabla() {
+      const tbody = document.querySelector("#tablaNotas tbody");
+      tbody.innerHTML = "";
+
+      const filtroMateria = document.getElementById("filtroMateria").value.toLowerCase();
+      const filtroPeriodo = document.getElementById("filtroPeriodo").value;
+      const filtroNota = document.getElementById("filtroNota").value;
+
+      const notasFiltradas = notas.filter((n) => {
+        return (
+          (!filtroMateria || n.materia.toLowerCase().includes(filtroMateria)) &&
+          (!filtroPeriodo || n.periodo === filtroPeriodo) &&
+          (!filtroNota || n.nota === filtroNota)
+        );
+      });
+
+      notasFiltradas.forEach((n, indexGlobal) => {
+        const row = `<tr>
+          <td>${n.materia}</td>
+          <td>${n.periodo}</td>
+          <td>${n.nota}</td>
+          <td class="acciones">
+            <button onclick="eliminarNota(${notas.indexOf(n)})">🗑️</button>
+          </td>
+        </tr>`;
+        tbody.innerHTML += row;
+      });
+
+      calcularPromedio(notasFiltradas, filtroPeriodo);
+    }
+
+    function calcularPromedio(lista, filtroPeriodo) {
+      const promedioDiv = document.getElementById("promedio");
+
+      if (lista.length === 0) {
+        promedioDiv.textContent = "Promedio: -";
+        return;
+      }
+
+      const suma = lista.reduce((acc, n) => acc + equivalencias[n.nota], 0);
+      const promedio = suma / lista.length;
+      let calificacion;
+
+      if (promedio < 1.5) calificacion = "J - Bajo";
+      else if (promedio < 2.5) calificacion = "B - Básico";
+      else if (promedio < 3.5) calificacion = "A - Alto";
+      else calificacion = "S - Superior";
+
+      if (filtroPeriodo) {
+        promedioDiv.textContent = `Promedio Período ${filtroPeriodo}: ${promedio.toFixed(2)} (${calificacion})`;
+      } else {
+        promedioDiv.textContent = `Promedio General: ${promedio.toFixed(2)} (${calificacion})`;
+      }
+    }
+
+    function exportarExcel() {
+      const data = [["Materia", "Período", "Nota"]];
+      notas.forEach(n => data.push([n.materia, n.periodo, n.nota]));
+      const hoja = XLSX.utils.aoa_to_sheet(data);
+      const libro = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(libro, hoja, "Notas");
+      XLSX.writeFile(libro, "notas.xlsx");
+    }
+
+    function exportarPDF() {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+      doc.text("Reporte de Notas - EduTrack 11", 20, 10);
+
+      let y = 20;
+      notas.forEach(n => {
+        doc.text(`${n.materia} - Período ${n.periodo} - Nota ${n.nota}`, 20, y);
+        y += 10;
+      });
+
+      doc.save("notas.pdf");
+    }
+
+    // Inicializar tabla
+    actualizarTabla();
+  </script>
+</body>
+</html>
